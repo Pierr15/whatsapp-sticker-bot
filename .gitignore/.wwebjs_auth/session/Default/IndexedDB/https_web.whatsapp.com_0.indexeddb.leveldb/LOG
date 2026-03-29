@@ -1,0 +1,10 @@
+2026/03/29-11:19:34.561 480c Reusing MANIFEST D:\whatsapp-sticker-bot\.wwebjs_auth\session\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2026/03/29-11:19:34.569 480c Recovering log #6
+2026/03/29-11:19:34.605 480c Reusing old log D:\whatsapp-sticker-bot\.wwebjs_auth\session\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/000006.log 
+2026/03/29-11:19:58.286 6fbc Level-0 table #11: started
+2026/03/29-11:19:58.329 6fbc Level-0 table #11: 1255366 bytes OK
+2026/03/29-11:19:58.331 6fbc Delete type=0 #6
+2026/03/29-11:19:58.398 6fbc Compacting 1@1 + 1@2 files
+2026/03/29-11:19:58.464 6fbc Generated table #12@1: 23476 keys, 991637 bytes
+2026/03/29-11:19:58.464 6fbc Compacted 1@1 + 1@2 files => 991637 bytes
+2026/03/29-11:19:58.466 6fbc compacted to: files[ 0 0 1 0 0 0 0 ]
