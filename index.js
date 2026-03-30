@@ -5,8 +5,8 @@ const sharp   = require('sharp');
 const http    = require('http');
 
 // ── Default stiker info ────────────────────────────────────────────────────────
-const DEFAULT_STICKER_NAME   = '✨ Stiker';
-const DEFAULT_STICKER_AUTHOR = 'StikerBot';
+const DEFAULT_STICKER_NAME   = '✨ Bot Stiker';
+const DEFAULT_STICKER_AUTHOR = 'By Pierr';
 
 // ── QR server state ───────────────────────────────────────────────────────────
 let latestQR = null;
@@ -104,7 +104,6 @@ server.listen(3000, () => {
 const client = new Client({
     puppeteer: {
         headless: true,
-        // HAPUS baris executablePath: '/usr/bin/chromium-browser'
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
