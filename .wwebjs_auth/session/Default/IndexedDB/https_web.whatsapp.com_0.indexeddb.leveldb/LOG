@@ -1,0 +1,13 @@
+2026/03/29-16:22:56.957 4ebc Reusing MANIFEST D:\bot-stiker\.wwebjs_auth\session\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2026/03/29-16:22:56.957 4ebc Recovering log #16
+2026/03/29-16:22:56.964 4ebc Reusing old log D:\bot-stiker\.wwebjs_auth\session\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/000016.log 
+2026/03/29-16:25:52.715 4ebc Level-0 table #21: started
+2026/03/29-16:25:52.728 4ebc Level-0 table #21: 2163818 bytes OK
+2026/03/29-16:25:52.729 4ebc Delete type=0 #16
+2026/03/29-16:26:41.022 4ebc Compacting 1@1 + 1@2 files
+2026/03/29-16:26:41.060 4ebc Generated table #22@1: 28138 keys, 2198340 bytes
+2026/03/29-16:26:41.065 4ebc Generated table #23@1: 5358 keys, 177073 bytes
+2026/03/29-16:26:41.065 4ebc Compacted 1@1 + 1@2 files => 2375413 bytes
+2026/03/29-16:26:41.065 4ebc compacted to: files[ 0 0 2 0 0 0 0 ]
+2026/03/29-16:26:41.066 4ebc Delete type=2 #18
+2026/03/29-16:26:41.066 4ebc Delete type=2 #21
