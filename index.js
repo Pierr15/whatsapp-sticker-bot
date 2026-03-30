@@ -102,6 +102,8 @@ server.listen(3000, () => {
 // ═════════════════════════════════════════════════════════════════════════════
 
 const client = new Client({
+    authStrategy: new LocalAuth(),
+    authTimeoutMs: 60000, // Tambahkan ini (60 detik)
     puppeteer: {
         headless: true,
         args: [
