@@ -3,10 +3,11 @@ const qrcode = require('qrcode-terminal');
 const QRCode  = require('qrcode');
 const sharp   = require('sharp');
 const http    = require('http');
+const axios   = require('axios'); // Tambahkan axios untuk API Brat
 
 // ── Default stiker info ────────────────────────────────────────────────────────
-const DEFAULT_STICKER_NAME   = '✨ Bot Stiker';
-const DEFAULT_STICKER_AUTHOR = 'By Pierr';
+const DEFAULT_STICKER_NAME   = '✨ Stiker';
+const DEFAULT_STICKER_AUTHOR = 'Bot Wangsaf';
 
 // ── QR server state ───────────────────────────────────────────────────────────
 let latestQR = null;
@@ -51,7 +52,6 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    // Generate QR sebagai gambar PNG (data URL)
     const qrImage = await QRCode.toDataURL(latestQR, { width: 300, margin: 2 });
 
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -103,38 +103,22 @@ server.listen(3000, () => {
 
 const client = new Client({
     authStrategy: new LocalAuth(),
-    authTimeoutMs: 90000, // Tambahkan ini (60 detik)const client = new Client({
-    authStrategy: new LocalAuth(),
-    webVersionCache: {
-        type: 'remote',
-        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
-    },
     puppeteer: {
-        headless: true,
-        args: [
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    '--disable-dev-shm-usage',
-    '--single-process',
-    '--no-zygote',
-    '--disable-gpu',
-    '--disable-extensions',
-    '--memory-pressure-off' // Tambahkan ini jika memungkinkan
-],
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        headless: true
     }
 });
 
 client.on('qr', (qr) => {
     latestQR = qr;
-    // Tetap tampilkan di terminal juga (sebagai cadangan)
     console.log('\n📱 QR tersedia! Buka http://localhost:3000 di browser kamu\n');
     qrcode.generate(qr, { small: true });
 });
 
 client.on('ready', () => {
-    latestQR = null; // Hapus QR setelah berhasil login
+    latestQR = null; 
     console.log('\n✅ Bot WhatsApp Stiker siap digunakan!');
-    console.log('📌 Perintah: .s | .stiker nama|author | .help\n');
+    console.log('📌 Perintah: .s | .st | .brat | .help\n');
 });
 
 client.on('authenticated', () => console.log('🔐 Autentikasi berhasil!'));
@@ -148,18 +132,28 @@ client.on('disconnected',  (reason) => console.log('🔌 Bot terputus:', reason)
 client.on('message', async (msg) => {
     try {
         const body = msg.body?.trim() ?? '';
+        const command = body.split(' ')[0].toLowerCase();
+        const args = body.slice(command.length).trim();
 
-        if (['.help', '.menu'].includes(body.toLowerCase())) {
+        if (['.help', '.menu'].includes(command)) {
             await sendHelp(msg); return;
         }
 
-        if (body.toLowerCase() === '.s') {
+        if (command === '.s') {
             await handleSticker(msg, DEFAULT_STICKER_NAME, DEFAULT_STICKER_AUTHOR); return;
         }
 
-        if (body.toLowerCase().startsWith('.stiker')) {
-            const args   = body.slice(7).trim();
-            const parts  = args.split('|');
+        if (command === '.st') {
+            await handleStickerText(msg, args); return;
+        }
+
+        if (command === '.brat') {
+            await handleBrat(msg, args); return;
+        }
+
+        if (command.startsWith('.stiker')) {
+            const cmdArgs = body.slice(7).trim();
+            const parts  = cmdArgs.split('|');
             const name   = (parts[0] ?? '').trim() || DEFAULT_STICKER_NAME;
             const author = (parts[1] ?? '').trim() || DEFAULT_STICKER_AUTHOR;
             await handleSticker(msg, name, author); return;
@@ -171,7 +165,7 @@ client.on('message', async (msg) => {
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
-//  HANDLER: STIKER
+//  HANDLER: STIKER BIASA (.s)
 // ═════════════════════════════════════════════════════════════════════════════
 
 async function handleSticker(msg, stickerName, stickerAuthor) {
@@ -187,43 +181,101 @@ async function handleSticker(msg, stickerName, stickerAuthor) {
     }
 
     if (!mediaMsg) {
-        await msg.reply(
-            '⚠️ *Gambarnya mana woy!*\n\n' +
-            'Kirim gambar pake caption command, atau reply gambar pake command.'
-        );
+        await msg.reply('⚠️ *Kirim/Reply gambar* pake perintah *.s*');
         return;
     }
 
     try {
         await msg.reply('⏳ Sabar, lagi bikin nih...');
-
-        const media        = await mediaMsg.downloadMedia();
-        const inputBuffer  = Buffer.from(media.data, 'base64');
+        const media = await mediaMsg.downloadMedia();
+        const inputBuffer = Buffer.from(media.data, 'base64');
+        
         const outputBuffer = await sharp(inputBuffer)
-            .resize(512, 512, {
-                fit: 'contain',
-                background: { r: 0, g: 0, b: 0, alpha: 0 }
-            })
+            .resize(512, 512, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
             .webp({ quality: 80 })
             .toBuffer();
 
-        const stickerMedia = new MessageMedia(
-            'image/webp',
-            outputBuffer.toString('base64'),
-            'sticker.webp'
-        );
-
-        await msg.reply(stickerMedia, null, {
+        const stickerMedia = new MessageMedia('image/webp', outputBuffer.toString('base64'), 'sticker.webp');
+        await client.sendMessage(msg.from, stickerMedia, {
             sendMediaAsSticker: true,
-            stickerName:   stickerName,
-            stickerAuthor: stickerAuthor,
+            stickerName,
+            stickerAuthor,
+        });
+    } catch (err) {
+        await msg.reply('❌ Gagal bikin stiker');
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  HANDLER: STIKER TEXT (.st)
+// ═════════════════════════════════════════════════════════════════════════════
+
+async function handleStickerText(msg, text) {
+    let mediaMsg = null;
+    if (msg.hasMedia && msg.type === 'image') mediaMsg = msg;
+    else if (msg.hasQuotedMsg) {
+        const quoted = await msg.getQuotedMessage();
+        if (quoted.hasMedia && quoted.type === 'image') mediaMsg = quoted;
+    }
+
+    if (!mediaMsg || !text) {
+        await msg.reply('⚠️ Pake format: Kirim/Reply gambar pake caption *.st teks lu*');
+        return;
+    }
+
+    try {
+        await msg.reply('⏳ Lagi nambahin teks...');
+        const media = await mediaMsg.downloadMedia();
+        const inputBuffer = Buffer.from(media.data, 'base64');
+
+        // Membuat overlay teks menggunakan SVG
+        const svgText = `
+            <svg width="512" height="512">
+                <style>
+                    .title { fill: white; font-size: 50px; font-weight: bold; font-family: sans-serif; filter: drop-shadow(3px 3px 2px rgba(0,0,0,0.8)); }
+                </style>
+                <text x="50%" y="90%" text-anchor="middle" class="title">${text}</text>
+            </svg>`;
+
+        const outputBuffer = await sharp(inputBuffer)
+            .resize(512, 512, { fit: 'cover' })
+            .composite([{ input: Buffer.from(svgText), top: 0, left: 0 }])
+            .webp({ quality: 80 })
+            .toBuffer();
+
+        const stickerMedia = new MessageMedia('image/webp', outputBuffer.toString('base64'), 'sticker.webp');
+        await client.sendMessage(msg.from, stickerMedia, { sendMediaAsSticker: true });
+    } catch (err) {
+        await msg.reply('❌ Gagal memproses stiker teks');
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  HANDLER: BRAT (.brat)
+// ═════════════════════════════════════════════════════════════════════════════
+
+async function handleBrat(msg, text) {
+    if (!text) return msg.reply('⚠️ Pake format: *.brat teks kamu*');
+
+    try {
+        await msg.reply('⏳ Sabar, lagi bikin nih...');
+        const apiRes = await axios.get(`https://brat.caliphdev.com/api/brat?text=${encodeURIComponent(text)}`, {
+            responseType: 'arraybuffer'
         });
 
-        console.log(`✅ Stiker "${stickerName}" by "${stickerAuthor}" → ${msg.from}`);
+        const outputBuffer = await sharp(apiRes.data)
+            .resize(512, 512, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 1 } })
+            .webp({ quality: 80 })
+            .toBuffer();
 
+        const stickerMedia = new MessageMedia('image/webp', outputBuffer.toString('base64'), 'sticker.webp');
+        await client.sendMessage(msg.from, stickerMedia, { 
+            sendMediaAsSticker: true,
+            stickerName: 'Brat Sticker',
+            stickerAuthor: 'Bot Wangsaf'
+        });
     } catch (err) {
-        console.error('❌ Gagal bikin stiker:', err.message);
-        await msg.reply('❌ Gagal bikin stiker. Pastiin file pake format yang valid! (JPG/PNG/WEBP)');
+        await msg.reply('❌ Gagal ngambil data Brat. Coba lagi nanti.');
     }
 }
 
@@ -234,40 +286,22 @@ async function handleSticker(msg, stickerName, stickerAuthor) {
 async function sendHelp(msg) {
     const helpText =
         '╔══════════════════════════╗\n' +
-        '║   🤖  *BOT STIKER WA*    ║\n' +
+        '║   🤖  *BOT STIKER WA* ║\n' +
         '╚══════════════════════════╝\n\n' +
-
-        '📌 *LIST COMMAND*\n' +
+        '📌 *LIST COMMANDS*\n' +
         '─────────────────────────\n\n' +
-
         '🖼️ *.s*\n' +
-        '  Ubah foto yang lo kirim jadi stiker\n' +
-
-        '🎨 *.stiker nama pack sticker|author*\n' +
-        '  Ubah foto yang lo kirim jadi stiker\n' +
-        '  plus kasih watermark ke stiker lo\n\n' +
-
-        '❓ *.menu / .help*\n' +
-        '  Nampilin pesan panduan ini\n\n' +
-
+        '  Gambar → Stiker Biasa\n\n' +
+        '✍️ *.st <teks>*\n' +
+        '  Gambar + Teks → Stiker\n\n' +
+        '☁️ *.brat <teks>*\n' +
+        '  Teks → Stiker gaya Brat\n\n' +
+        '🎨 *.stiker nama|author*\n' +
+        '  Custom Nama/Author Stiker\n\n' +
+        '❓ *.menu / .help*\n\n' +
         '─────────────────────────\n' +
-        '📖 *TUTORIAL*\n\n' +
-
-        '1️⃣  Kirim gambar + caption *.s*\n' +
-        '2️⃣  Reply gambar dengan *.s*\n' +
-        '3️⃣  Kirim gambar + caption\n' +
-        '    _.stiker Nama Pack Stiker|Nama Author_\n\n' +
-
-        '─────────────────────────\n' +
-        '💡 *CONTOH*\n\n' +
-        '• `.stiker kumpulan doksli|mas amba`\n' +
-        '• `.stiker |mas gatot`  _(nama pack default)_\n' +
-        '• `.stiker kumpulan timpa|`  _(author default)_\n\n' +
-
-        '_Format: JPG · PNG · WEBP_\n\n' +
-
-        'Author: Pierr (wa.me/6285875530175)';
-
+        '💡 *CONTOH*\n' +
+        '• Kirim gambar pake caption: `.st Nguwawor`';
     await msg.reply(helpText);
 }
 
