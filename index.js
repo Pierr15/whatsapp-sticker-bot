@@ -265,7 +265,7 @@ async function handleBrat(msg, text) {
 
     try {
         await msg.reply('⏳ Sabar, lagi bikin nih...');
-        const apiRes = await axios.get(`https://brat.caliphdev.com/api/brat?text=${encodeURIComponent(text)}`, {
+        const apiRes = await axios.get(`https://widipe.com/brat?text=${encodeURIComponent(text)}}`, {
             responseType: 'arraybuffer'
         });
 
