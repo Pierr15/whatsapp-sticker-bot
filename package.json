@@ -3,10 +3,11 @@
   "version": "2.0.0",
   "description": "Bot WhatsApp stiker dengan fitur .s, .stiker nama|author, dan .help",
   "main": "index.js",
- "scripts": {
-  "start": "apt-get update && apt-get install -y libglib2.0-0 libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libasound2t64 libpangocairo-1.0-0 libx11-xcb1 libxshmfence1 libgtk-3-0 && node index.js"
-},
+  "scripts": {
+    "start": "apt-get update && apt-get install -y libglib2.0-0 libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libasound2t64 libpangocairo-1.0-0 libx11-xcb1 libxshmfence1 libgtk-3-0 && node index.js"
+  },
   "dependencies": {
+    "@napi-rs/canvas": "^0.1.97",
     "puppeteer": "^24.40.0",
     "qrcode": "^1.5.3",
     "qrcode-terminal": "^0.12.0",
