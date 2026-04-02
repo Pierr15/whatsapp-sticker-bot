@@ -3,6 +3,7 @@ const qrcode = require('qrcode-terminal');
 const QRCode  = require('qrcode');
 const sharp   = require('sharp');
 const http    = require('http');
+const { createCanvas } = require('@napi-rs/canvas');
 
 // ── Default stiker info ────────────────────────────────────────────────────────
 const DEFAULT_STICKER_NAME   = '✨ Stiker';
@@ -104,7 +105,17 @@ server.listen(3000, () => {
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--no-first-run',
+            '--no-zygote',
+            '--single-process',
+            '--disable-gpu'
+        ],
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined
     }
 });
 
@@ -118,7 +129,7 @@ client.on('qr', (qr) => {
 client.on('ready', () => {
     latestQR = null; // Hapus QR setelah berhasil login
     console.log('\n✅ Bot WhatsApp Stiker siap digunakan!');
-    console.log('📌 Perintah: .s | .stiker nama|author | .help\n');
+    console.log('📌 Perintah: .s | .stiker nama|author | .brat teks | .help\n');
 });
 
 client.on('authenticated', () => console.log('🔐 Autentikasi berhasil!'));
@@ -147,6 +158,12 @@ client.on('message', async (msg) => {
             const name   = (parts[0] ?? '').trim() || DEFAULT_STICKER_NAME;
             const author = (parts[1] ?? '').trim() || DEFAULT_STICKER_AUTHOR;
             await handleSticker(msg, name, author); return;
+        }
+
+        // ── Fitur Brat ────────────────────────────────────────────────────────
+        if (body.toLowerCase().startsWith('.brat')) {
+            const text = body.slice(5).trim();
+            await handleBrat(msg, text); return;
         }
 
     } catch (err) {
@@ -212,6 +229,115 @@ async function handleSticker(msg, stickerName, stickerAuthor) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
+//  HANDLER: BRAT
+// ═════════════════════════════════════════════════════════════════════════════
+
+async function handleBrat(msg, text) {
+    if (!text) {
+        await msg.reply(
+            '⚠️ *Teks tidak boleh kosong!*\n\n' +
+            'Contoh: `.brat charli xcx`'
+        );
+        return;
+    }
+
+    try {
+        await msg.reply('⏳ Sedang membuat stiker brat...');
+
+        // 1. Generate gambar brat (PNG) pakai canvas
+        const pngBuffer = await generateBratImage(text);
+
+        // 2. Convert PNG → WebP 512x512 pakai sharp (supaya jadi stiker WA)
+        const webpBuffer = await sharp(pngBuffer)
+            .resize(512, 512, {
+                fit: 'contain',
+                background: { r: 255, g: 255, b: 255, alpha: 1 } // warna putih
+            })
+            .webp({ quality: 90 })
+            .toBuffer();
+
+        const stickerMedia = new MessageMedia(
+            'image/webp',
+            webpBuffer.toString('base64'),
+            'brat.webp'
+        );
+
+        await msg.reply(stickerMedia, null, {
+            sendMediaAsSticker: true,
+            stickerName:   'brat',
+            stickerAuthor: DEFAULT_STICKER_AUTHOR,
+        });
+
+        console.log(`✅ Stiker brat "${text}" → ${msg.from}`);
+
+    } catch (err) {
+        console.error('❌ Gagal membuat stiker brat:', err.message);
+        await msg.reply('❌ Gagal membuat stiker brat. Coba lagi ya!');
+    }
+}
+
+// ── Generate gambar brat style ─────────────────────────────────────────────
+
+function generateBratImage(text) {
+    const SIZE = 512;
+    const canvas = createCanvas(SIZE, SIZE);
+    const ctx = canvas.getContext('2d');
+
+    // Background hijau brat
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, SIZE, SIZE);
+
+    // Teks selalu lowercase
+    const bratText = text.toLowerCase();
+
+    // Hitung font size adaptif berdasarkan panjang teks
+    let fontSize = Math.max(40, Math.min(120, Math.floor(480 / Math.max(bratText.length, 4))));
+
+    ctx.fillStyle = '#000000';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    // Efek blur khas brat
+    ctx.filter = 'blur(1.5px)';
+    ctx.font = `bold ${fontSize}px Arial`;
+
+    // Wrap teks supaya muat
+    const lines = wrapText(ctx, bratText, SIZE - 60, fontSize);
+    const lineHeight = fontSize * 1.25;
+    const totalHeight = lines.length * lineHeight;
+    let startY = (SIZE - totalHeight) / 2 + lineHeight / 2;
+
+    for (const line of lines) {
+        ctx.fillText(line, SIZE / 2, startY);
+        startY += lineHeight;
+    }
+
+    return canvas.encode('png');
+}
+
+function wrapText(ctx, text, maxWidth, fontSize) {
+    // Kalau teks pendek, langsung return 1 baris
+    if (ctx.measureText(text).width <= maxWidth) return [text];
+
+    const words = text.split(' ');
+    const lines = [];
+    let currentLine = '';
+
+    for (const word of words) {
+        const testLine = currentLine ? `${currentLine} ${word}` : word;
+        if (ctx.measureText(testLine).width > maxWidth && currentLine) {
+            lines.push(currentLine);
+            currentLine = word;
+        } else {
+            currentLine = testLine;
+        }
+    }
+    if (currentLine) lines.push(currentLine);
+
+    return lines;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
 //  HANDLER: HELP
 // ═════════════════════════════════════════════════════════════════════════════
 
@@ -232,6 +358,10 @@ async function sendHelp(msg) {
         '  Konversi gambar jadi stiker\n' +
         '  dengan nama & author custom.\n\n' +
 
+        '🟢 *.brat teks*\n' +
+        '  Buat stiker bergaya brat\n' +
+        '  (hijau + teks blur ala Charli XCX).\n\n' +
+
         '❓ *.help / .menu*\n' +
         '  Tampilkan pesan bantuan ini.\n\n' +
 
@@ -241,13 +371,16 @@ async function sendHelp(msg) {
         '1️⃣  Kirim gambar + caption *.s*\n' +
         '2️⃣  Reply gambar dengan *.s*\n' +
         '3️⃣  Kirim gambar + caption\n' +
-        '    _.stiker Nama Stiker|Nama Author_\n\n' +
+        '    _.stiker Nama Stiker|Nama Author_\n' +
+        '4️⃣  Ketik *.brat teks kamu* untuk stiker brat\n\n' +
 
         '─────────────────────────\n' +
         '💡 *CONTOH*\n\n' +
         '• `.stiker Kucingku|BotKu`\n' +
         '• `.stiker |BotKu`  _(nama default)_\n' +
-        '• `.stiker Kucingku|`  _(author default)_\n\n' +
+        '• `.stiker Kucingku|`  _(author default)_\n' +
+        '• `.brat charli xcx`\n' +
+        '• `.brat so what`\n\n' +
 
         '_Format: JPG · PNG · WEBP_';
 
