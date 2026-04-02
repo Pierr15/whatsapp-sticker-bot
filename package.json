@@ -8,6 +8,7 @@
     "dev": "nodemon index.js"
   },
   "dependencies": {
+    "@napi-rs/canvas": "^0.1.97",
     "axios": "^1.14.0",
     "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0",
