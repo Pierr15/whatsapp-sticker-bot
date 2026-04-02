@@ -87,7 +87,7 @@ const DEFAULT_STICKER_AUTHOR = 'StikerBot';  // ganti sesuai keinginan
 whatsapp-sticker-bot/
 ├── index.js          ← File utama bot
 ├── package.json      ← Dependensi
-├── README.md         ← Dokumentasi ini
+├── README.md         ← Dokumen ini
 └── .wwebjs_auth/     ← Sesi WhatsApp (otomatis dibuat)
 ```
 
