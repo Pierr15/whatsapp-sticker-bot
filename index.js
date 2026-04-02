@@ -360,7 +360,7 @@ async function sendHelp(msg) {
 
         '🟢 *.brat teks*\n' +
         '  Buat stiker bergaya brat\n' +
-        '  (hijau + teks blur ala Charli XCX).\n\n' +
+        '  (putih + teks blur ala Charli XCX).\n\n' +
 
         '❓ *.help / .menu*\n' +
         '  Tampilkan pesan bantuan ini.\n\n' +
