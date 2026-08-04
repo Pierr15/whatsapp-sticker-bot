@@ -1,3 +1,5 @@
+#Currently Disabled
+
 # 🤖 Bot WhatsApp Stiker v2
 
 Bot WhatsApp untuk mengkonversi gambar menjadi stiker dengan nama & author custom.
