@@ -5,6 +5,17 @@ const sharp   = require('sharp');
 const http    = require('http');
 const { createCanvas } = require('@napi-rs/canvas');
 
+// ── Global error guard ───────────────────────────────────────────────────────
+// Tanpa ini, error async dari dalam whatsapp-web.js/puppeteer (mis. saat inject
+// di tengah navigasi) menjadi unhandled rejection dan Node 22 langsung
+// mematikan proses — bot "berhenti" diam-diam setelah autentikasi.
+process.on('uncaughtException', (err) => {
+    console.error('💥 Uncaught exception:', err.stack || err);
+});
+process.on('unhandledRejection', (reason) => {
+    console.error('💥 Unhandled rejection:', (reason && reason.stack) || reason);
+});
+
 // ── Default stiker info ────────────────────────────────────────────────────────
 const DEFAULT_STICKER_NAME   = '✨ Stiker';
 const DEFAULT_STICKER_AUTHOR = 'StikerBot';
@@ -98,6 +109,92 @@ server.listen(3000, () => {
     console.log('📱 Scan QR Code yang tampil di browser untuk login\n');
 });
 
+// ── Reconnect & watchdog state ───────────────────────────────────────────────
+const RECONNECT_DELAY_MS = 10_000;  // jeda sebelum reconnect setelah disconnect
+const BOOT_TIMEOUT_MS    = 90_000;  // batas waktu start → QR/autentikasi
+const READY_TIMEOUT_MS   = 60_000;  // batas waktu authenticated → ready
+const MAX_RESTARTS       = 5;       // batas restart karena start/ready bermasalah
+let isBooting        = false;
+let isReady          = false;
+let restartAttempts  = 0;
+let bootWatchdog     = null;
+let readyWatchdog    = null;
+
+// ── Helper: tutup browser tanpa menghapus sesi login ─────────────────────────
+// destroy() milik LocalAuth hanya menutup browser; sesi di .wwebjs_auth tetap ada.
+async function safeDestroy() {
+    try {
+        await Promise.race([
+            client.destroy(),
+            new Promise((r) => setTimeout(r, 15_000)),
+        ]);
+    } catch (err) {
+        console.error('⚠️  destroy() gagal (diabaikan):', err?.message || err);
+    }
+}
+
+// ── Helper: watchdog start — restart kalau QR/autentikasi tak kunjung muncul ──
+function armBootWatchdog() {
+    clearTimeout(bootWatchdog);
+    bootWatchdog = setTimeout(() => {
+        if (isReady || latestQR) return;
+        console.error(`⏱️  Tidak ada QR/autentikasi dalam ${BOOT_TIMEOUT_MS / 1000} detik. Me-restart client...`);
+        restartClient('boot timeout');
+    }, BOOT_TIMEOUT_MS);
+}
+
+// ── Helper: start client dengan guard agar tidak terpicu ganda ────────────────
+function bootClient() {
+    if (isBooting) return;
+    isBooting = true;
+    Promise.resolve()
+        .then(() => client.initialize())
+        .catch((err) => console.error('❌ initialize gagal:', err?.message || err))
+        .finally(() => { isBooting = false; });
+}
+
+// ── Helper: restart terkontrol (dipakai watchdog) — sesi tetap tersimpan ──────
+async function restartClient(reason) {
+    if (isBooting) return;
+    if (restartAttempts >= MAX_RESTARTS) {
+        console.error(`🛑 Sudah ${MAX_RESTARTS}x restart tanpa berhasil (alasan terakhir: ${reason}). Hentikan percobaan otomatis — jalankan ulang node index.js secara manual.`);
+        return;
+    }
+    restartAttempts++;
+    isBooting = true;
+    try {
+        console.log(`♻️  Me-restart client (percobaan ${restartAttempts}/${MAX_RESTARTS}) — ${reason}...`);
+        await safeDestroy();
+        latestQR = null;
+        armBootWatchdog();
+        await client.initialize();
+        console.log('♻️  Restart selesai dijalankan.');
+    } catch (err) {
+        console.error('❌ Gagal restart:', err?.message || err);
+    } finally {
+        isBooting = false;
+    }
+}
+
+// ── Helper: reconnect setelah disconnect — tanpa batas percobaan ──────────────
+async function reconnectClient(reason) {
+    if (isBooting) return;
+    isBooting = true;
+    try {
+        console.log(`♻️  Menyambung ulang dalam ${RECONNECT_DELAY_MS / 1000} detik...`);
+        await new Promise((r) => setTimeout(r, RECONNECT_DELAY_MS));
+        await safeDestroy();
+        latestQR = null;
+        armBootWatchdog();
+        await client.initialize();
+        console.log('♻️  Reconnect selesai dijalankan.');
+    } catch (err) {
+        console.error('❌ Gagal reconnect:', err?.message || err);
+    } finally {
+        isBooting = false;
+    }
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 //  WHATSAPP CLIENT
 // ═════════════════════════════════════════════════════════════════════════════
@@ -111,9 +208,10 @@ const client = new Client({
             '--disable-dev-shm-usage',
             '--disable-accelerated-2d-canvas',
             '--no-first-run',
-            '--no-zygote',
-            '--single-process',
             '--disable-gpu'
+            // Catatan: jangan pakai --single-process / --no-zygote.
+            // Chrome modern (puppeteer 24) tidak mendukungnya dan menyebabkan
+            // error "Navigating frame was detached" saat client.initialize().
         ],
         executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined
     }
@@ -121,20 +219,55 @@ const client = new Client({
 
 client.on('qr', (qr) => {
     latestQR = qr;
+    clearTimeout(bootWatchdog); // user sedang scan — jangan di-restart oleh watchdog
+    // Tetap tampilkan di terminal juga (sebagai cadangan)
+    console.log('\n📱 QR tersedia! Buka http://localhost:3000 di browser kamu\n');
+    qrcode.generate(qr, { small: true });
+});
+
+client.on('qr', (qr) => {
+    latestQR = qr;
+    clearTimeout(bootWatchdog); // user sedang scan — jangan di-restart oleh watchdog
     // Tetap tampilkan di terminal juga (sebagai cadangan)
     console.log('\n📱 QR tersedia! Buka http://localhost:3000 di browser kamu\n');
     qrcode.generate(qr, { small: true });
 });
 
 client.on('ready', () => {
+    isReady = true;
+    restartAttempts = 0;
+    clearTimeout(bootWatchdog);
+    clearTimeout(readyWatchdog);
     latestQR = null; // Hapus QR setelah berhasil login
     console.log('\n✅ Bot WhatsApp Stiker siap digunakan!');
     console.log('📌 Perintah: .s | .stiker nama|author | .brat teks | .help\n');
 });
 
-client.on('authenticated', () => console.log('🔐 Autentikasi berhasil!'));
+client.on('authenticated', () => {
+    console.log('🔐 Autentikasi berhasil!');
+    // Catatan: WA Web 2.3000.x kadang me-reload halaman tepat setelah sync,
+    // memutus rantai init internal wwebjs (ExposeStore → LoadUtils →
+    // attachEventListeners) sehingga event ready tidak pernah terpicu — tanpa
+    // error yang muncul di Node. Watchdog di bawah mendeteksi kondisi ini.
+    clearTimeout(bootWatchdog);
+    clearTimeout(readyWatchdog);
+    readyWatchdog = setTimeout(async () => {
+        if (isReady) return;
+        console.error(`⏱️  Ready tidak terpicu ${READY_TIMEOUT_MS / 1000} detik setelah autentikasi...`);
+        await restartClient('ready timeout');
+    }, READY_TIMEOUT_MS);
+});
+
 client.on('auth_failure',  (msg) => console.error('❌ Autentikasi gagal:', msg));
-client.on('disconnected',  (reason) => console.log('🔌 Bot terputus:', reason));
+client.on('error',         (err)  => console.error('❌ Client error:', err?.message || err));
+
+client.on('disconnected', async (reason) => {
+    console.log('🔌 Bot terputus:', reason);
+    isReady = false;
+    clearTimeout(readyWatchdog);
+    // Reconnect otomatis — jangan biarkan bot mati diam-diam.
+    await reconnectClient(reason);
+});
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  MESSAGE HANDLER
@@ -392,4 +525,5 @@ async function sendHelp(msg) {
 // ═════════════════════════════════════════════════════════════════════════════
 
 console.log('🚀 Memulai Bot WhatsApp Stiker...');
-client.initialize();
+armBootWatchdog();
+bootClient();
